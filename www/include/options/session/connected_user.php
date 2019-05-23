@@ -42,24 +42,48 @@ $path = "./include/options/session/";
 require_once "./include/common/common-Func.php";
 require_once "./class/centreonMsg.class.php";
 
+
+echo "<PRE>";
+var_dump($_GET);
+var_dump(session_id());
+echo "</PRE>";
+
 $action = filter_var(
     $_GET["o"] ?? null,
     FILTER_SANITIZE_STRING
 );
 
-$userToKickSid = filter_var(
-    $_GET['session'] ?? null, // caution the sessionId to get, is the one of the user we want to logout
+$selectedUserSid = filter_var(
+    $_GET['session'] ?? null, // caution the sessionId to get, is the one of the selected user
     FILTER_SANITIZE_STRING
 );
 
-// o = k : when clicking on the kick user button
+/*
+ * $action == k : when using the kick the user button
+ * $action == s : when calling an LDAP synchronization of the user
+ */
 if ($action === "k") {
     $stmt = $pearDB->prepare("DELETE FROM session WHERE session_id = :userSessionId");
-    $stmt->bindValue(':userSessionId', $userToKickSid, \PDO::PARAM_STR);
+    $stmt->bindValue(':userSessionId', $selectedUserSid, \PDO::PARAM_STR);
     $stmt->execute();
     $msg = new CentreonMsg();
     $msg->setTextStyle("bold");
     $msg->setText(_("User kicked"));
+    $msg->setTimeOut("3");
+} elseif ($action === ["s"]) {
+    // @todo, including the required LDAP.class.php
+
+    // scanning user's data in the LDAP
+    require_once './class/centreonLDAP.class.php';
+
+
+    // updating user's data from the LDAP
+    // WIP
+
+
+    $msg = new CentreonMsg();
+    $msg->setTextStyle("bold");
+    $msg->setText(_("User's data updated from the LDAP"));
     $msg->setTimeOut("3");
 }
 
@@ -103,13 +127,27 @@ for ($cpt = 0; $r = $res->fetch(); $cpt++) {
     } else {
         $session_data[$cpt]["topology_name"] = $rCP["topology_name"];
     }
-    // adding the link to be able to kick the user
+
     if ($centreon->user->admin) {
+        // adding the link to be able to kick the user
         $session_data[$cpt]["actions"] = "<a href='./main.php?p=" . $p . "&o=k&session=" . $r['session_id'] .
             "'><img src='./img/icons/delete.png' border='0' alt='" . _("Kick User") .
             "' title='" . _("Kick User") . "'></a>";
+
+        // adding the link to be able to synchronize user's data from the LDAP
+        $session_data[$cpt]["synchronize"] = "<a href='./main.php?p=" . $p . "&o=s&session=" . $r['session_id'] .
+            "'><img src='./img/icones/16x16/refresh.gif' border='0' alt='" . _("Sync LDAP") .
+            "' title='" . _("Sync LDAP") . "'></a>";
+        $tpl->assign("wi_syncLdap", _("Refresh LDAP"));
+        $tpl->assign("wi_logoutUser", _("Logout user"));
+
     } else {
+        // hidding the buttons
         $session_data[$cpt]["actions"] = "";
+        $session_data[$cpt]["synchronize"] = "";
+        // hidding the column titles
+        $tpl->assign("wi_syncLdap", _(""));
+        $tpl->assign("wi_logoutUser", _(""));
     }
 }
 
